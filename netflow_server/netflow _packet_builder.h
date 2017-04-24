@@ -156,7 +156,7 @@ namespace acme {
       int interval = 10000;
       assert((interval & ~0x3fff) == 0);
 
-      _pkt.header.sampling_interval = htons((1 << 14) | interval);
+      _pkt.header.sampling_interval = 0; // htons((1 << 14) | interval);
     }
 
     template<typename lambda_t>
@@ -165,7 +165,7 @@ namespace acme {
       int flow = FindMatchingFlow(header,len);
       if (flow == max_flows){
         _pkt.header.sys_uptime = htonl(SysUptime());
-//        _pkt.header.unix_secs = SysUptime() / 1000;
+        _pkt.header.unix_secs = htonl(EpochTime());
 //        _pkt.header.unix_nsecs = (SysUptime() % 1000) * 1000000;
         if (_pkt.header.count){
           _pkt.header.flow_sequence = htonl(ntohl(_pkt.header.flow_sequence) + 1);

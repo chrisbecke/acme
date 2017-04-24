@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
   udp.bind();
 
   // The netflow collector is running here.
-  Address addr = Address::resolve("aopen", "2055", AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  Address addr = Address::resolve("localhost", "9996", AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
   int result = PacketSniffer::MonitorInterface("192.168.1.107", [&](const internet_header& header,int len){
     print(header, len);
