@@ -20,6 +20,7 @@
 #include <Windows.h>
 #include <WinSock2.h>
 #include <Mstcpip.h>
+#include <Ws2tcpip.h> // getaddrinfo etc
 #endif
 
 // system header files for socket using console apps on *nix

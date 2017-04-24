@@ -1,10 +1,22 @@
 // netflow_server.cpp : Defines the entry point for the console application.
 //
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 
 #include "netflow_server.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+
+#include "tcpip.h"
+#include "dgram.h"
+
+#include "packet_sniffer.h"
+#include "netflow _packet_builder.h"
+
+using namespace acme;
+using namespace acme::dgram;
 
 #ifdef _MSC_VER
 #ifdef _WIN32
@@ -13,6 +25,18 @@
 #endif
 
 #ifdef _WIN32
+
+
+enum SocketErrorCode {
+  wsa_invalid = 10022
+};
+
+
+inline SocketErrorCode LastSocketError()
+{
+  return  (SocketErrorCode)WSAGetLastError();
+}
+
 
 void WindowsInitSockets()
 {
@@ -41,60 +65,117 @@ void WindowsTestForRawSocketSupport()
 
 #endif
 
+void checksocketresult(int r, const char* message)
+{
+  if (r == 0)
+    return;
+
+  SocketErrorCode err = LastSocketError();
+
+  printf(message, err);
+
+  assert(0);
+}
+
+
+
+
+void print_tcp(const internet_header& hdr, const tcp_header& tcp, int len)
+{
+  char src[20];
+  char dst[20];
+  strcpy(src, inet_ntoa(*((in_addr*)&hdr.source_address)));
+  strcpy(dst, inet_ntoa(*((in_addr*)&hdr.destination_address)));
+
+  printf("%15s %5d/tcp -> %15s %5d/tcp %d\r\n",
+    src, htons(tcp.source_port), dst, htons(tcp.dest_port),len);
+}
+
+void print_udp(const internet_header& hdr, const udp_header& udp, int len)
+{
+  char src[20];
+  char dst[20];
+  strcpy(src, inet_ntoa(*((in_addr*)&hdr.source_address)));
+  strcpy(dst, inet_ntoa(*((in_addr*)&hdr.destination_address)));
+
+  printf("%15s %5d/udp -> %15s %5d/udp %d\r\n",
+    src, htons(udp.source_port), dst, htons(udp.dest_port),len);
+}
+
+// unknown
+void print_ip(const internet_header& hdr, int len)
+{
+  char src[20];
+  char dst[20];
+  strcpy(src, inet_ntoa(*((in_addr*)&hdr.source_address)));
+  strcpy(dst, inet_ntoa(*((in_addr*)&hdr.destination_address)));
+
+  char const* protocol;
+  switch (hdr.protocol)
+  {
+  case 1: protocol = "ICMP"; break;
+  case 2: protocol = "IGMP"; break;
+  case 6: protocol = "TCP"; break;
+  case 17: protocol = "UDP"; break;
+  default:
+    protocol = "XXXX";
+  }
+
+  printf("%d %d %02d %5d | %04x %05d | %3d %4s %04x | %15s | %15s | %d - %d\r\n",
+    hdr.version, hdr.ihl, hdr.tos, ntohs(hdr.total_len),   // 1
+    hdr.id, ntohs(hdr.frag_off),                           // 2
+    hdr.ttl, protocol, hdr.checksum,            // 3
+    src,                                            // 4
+    dst,                                            // 5
+    hdr.options,
+    len);                                   // 6
+}
+
+
+void print(const internet_header& hdr, int len)
+{
+  const char* ip_payload = (const char*)((uint32_t*)&hdr + hdr.ihl);
+
+  switch (hdr.protocol)
+  {
+  case 17: print_udp(hdr, *(udp_header*)ip_payload, len); break;
+  case 6: print_tcp(hdr, *(tcp_header*)ip_payload, len); break;
+  default:
+  case 2:  print_ip(hdr, len); break;
+  }
+}
+
 
 int main(int argc, char* argv[])
 {
   WindowsInitSockets();
   WindowsTestForRawSocketSupport();
 
-  // Create a normal BSD raw socket
-  auto sniffer = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
-  if (sniffer == INVALID_SOCKET)
-  {
-    int err = WSAGetLastError();
-    if (err == WSAEACCES)
-      printf("elevation failed?");
-    else
-      printf("Failed to create raw socket with error %d",err);
+  NetflowPacketBuilder packetBuilder;
 
-    return err;
-  }
-  assert(sniffer != INVALID_SOCKET);
+  //auto test = dgram::createSocket(AF_INET);
+  //auto test = dgram::Socket(AF_INET);
+  //test.bind();
+  //auto address = Address::resolve("netbox", "2055", AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  //test.SendTo("hello world", 100,address);
 
-  sockaddr_in if0 = { 0 };
-//  memcpy(&dest.sin_addr.s_addr, local->h_addr_list[in],
-    //sizeof(dest.sin_addr.s_addr));
-  if0.sin_family = AF_INET;
-  if0.sin_port = 0;
-//  dest.sin_zero = 0;
-  int r = bind(sniffer, (sockaddr*)&if0, sizeof(if0));
-  assert(r == 0);
+  auto udp = dgram::Socket(AF_INET);
+  udp.bind();
 
-  DWORD rcvall_flag = 1;
-  DWORD bytesReturned = 0;
-  r = WSAIoctl(sniffer, SIO_RCVALL, &rcvall_flag, sizeof(rcvall_flag), NULL, 0, &bytesReturned, NULL, NULL);
-  if (r != 0)
-  {
-    int err = WSAGetLastError();
+  // The netflow collector is running here.
+  Address addr = Address::resolve("aopen", "2055", AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-    printf("Failed to make raw socket promicuous with error %d", err);
+  int result = PacketSniffer::MonitorInterface("192.168.1.107", [&](const internet_header& header,int len){
+    print(header, len);
 
-    return err;
-  }
+    packetBuilder.AddFlow(header, len, [&](void* data, int len){
+      // packet builder calls this when it thinks the collected flows must be sent.
+      udp.SendTo(data,len,addr);
+    });
 
-  char Buffer[65536];
-
-  while (1)
-  {
-    sockaddr from;
-    int fromlen = sizeof(from);
-    int pktlen = recvfrom(sniffer, Buffer, sizeof(Buffer), 0, &from, &fromlen);
-  }
-
-
-  closesocket(sniffer);
+  });
 
   WindowsShutdownSockets();
-	return 0;
+	return result;
 }
 

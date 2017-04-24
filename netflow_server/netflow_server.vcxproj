@@ -82,7 +82,12 @@
     <ClCompile Include="netflow_server.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="dgram.h" />
+    <ClInclude Include="netflow.h" />
+    <ClInclude Include="netflow _packet_builder.h" />
     <ClInclude Include="netflow_server.h" />
+    <ClInclude Include="packet_sniffer.h" />
+    <ClInclude Include="tcpip.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
