@@ -26,11 +26,11 @@ using namespace acme::dgram;
 
 #ifdef _WIN32
 
-
+/*
 enum SocketErrorCode {
   wsa_invalid = 10022
 };
-
+*/
 
 inline SocketErrorCode LastSocketError()
 {
@@ -70,7 +70,11 @@ void checksocketresult(int r, const char* message)
   if (r == 0)
     return;
 
-  SocketErrorCode err = LastSocketError();
+#ifdef _WIN32
+  socketerror err = LastSocketError();
+#else
+  socketerror err = socketerror(errno);
+#endif
 
   printf(message, err);
 
@@ -148,8 +152,11 @@ void print(const internet_header& hdr, int len)
 
 int main(int argc, char* argv[])
 {
+  printf("netflow_server starting...\r\n");
+#ifdef _WIN32
   WindowsInitSockets();
   WindowsTestForRawSocketSupport();
+#endif
 
   NetflowPacketBuilder packetBuilder;
 
@@ -175,7 +182,9 @@ int main(int argc, char* argv[])
 
   });
 
+#ifdef _WIN32
   WindowsShutdownSockets();
-	return result;
+#endif
+  return result;
 }
 

@@ -25,9 +25,16 @@
 
 // system header files for socket using console apps on *nix
 #ifndef _MSC_VER
-#include <unistd.h>
+#include <unistd.h> // close
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <errno.h> // errno, EWHATEVER
+#include <arpa/inet.h> // inet_addr
+
+
+//#ifdef _POSIX_VERSION
+//#endif
+
 #endif

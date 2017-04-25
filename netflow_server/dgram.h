@@ -1,14 +1,24 @@
 #pragma once
 
+#include <string.h> //memcpy ???
+//#include <netinet/in.h>
+#include <netdb.h>
+
+
 namespace acme {
+
+#ifdef _POSIX
+  foo
+#endif
 
   enum class socketerror
   {
 #ifdef _WIN32
     Invalid           =  WSAEINVAL,        // 10022
     AddrNotAvailable  =  WSAEADDRNOTAVAIL, // 10049
-#elif defined POSIX
-    Invalid           = 0,
+#else //if //defined POSIX
+	Unknown           = 0,
+    Invalid           = ECONNREFUSED,
     AddrNotAvailable  = EADDRNOTAVAIL
 #endif
   };
@@ -23,7 +33,11 @@ namespace acme {
 
     socketerror err()
     {
+#ifdef _WIN32
       return (socketerror)WSAGetLastError();
+#else // posix
+		return socketerror::Unknown;
+#endif
     }
 
     class Address
@@ -77,7 +91,8 @@ namespace acme {
       }
       static Address resolve(const char* hostname, const char* service, int family=AF_UNSPEC, int socktype=0,int protocol=0)
       {
-        struct addrinfo hints, *servinfo;
+        addrinfo hints;
+		addrinfo* servinfo;
         int r;
 
         memset(&hints, 0, sizeof hints);
@@ -109,7 +124,12 @@ namespace acme {
       ~Socket()
       {
         if (_fd >= 0)
-          closesocket(_fd); 
+#ifdef _WIN32
+          closesocket(_fd);
+#else
+		  close(_fd);
+#endif		  
+		  
       }
 
       void bind(uint16_t port=0)
@@ -139,7 +159,6 @@ namespace acme {
 
         for (p = servinfo; p != NULL; p = p->ai_next)
         {
-          p->ai_addr;
           r = ::bind(_fd, p->ai_addr, p->ai_addrlen);
           assert(!r);
           break;
@@ -148,10 +167,9 @@ namespace acme {
         freeaddrinfo(servinfo); // all done with this structure
       }
 
-      int SendTo(const void* data, int len, const Address& to)
+      long SendTo(const void* data, int len, const Address& to)
       {
-        sockaddr_in* addr = (sockaddr_in*)*to;
-        int r = sendto(_fd, (const char*)data, len, 0, *to, to.len);
+        auto r = sendto(_fd, (const char*)data, len, 0, *to, to.len);
         if (r < 0){
           // sendto failed to send with an error
           auto e = err();

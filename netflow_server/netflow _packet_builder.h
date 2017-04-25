@@ -8,11 +8,16 @@ namespace acme {
 
   uint32_t SysUptime()
   {
+#ifdef _WIN32
     return GetTickCount();
+#else
+	return 0;
+#endif
   }
 
   uint32_t EpochTime()
   {
+#ifdef _WIN32
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
 
@@ -25,6 +30,8 @@ namespace acme {
     uint64_t unixEpocS = winEpocS - 11644473600ll;
 
     return uint32_t(unixEpocS);
+#endif
+	return 0;
   }
 
   class NetflowPacketBuilder

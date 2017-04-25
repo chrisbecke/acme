@@ -11,24 +11,25 @@ namespace acme {
     {
       // Create a normal BSD raw socket
       auto sniffer = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
-      if (sniffer == INVALID_SOCKET)
+      if (sniffer == -1)
       {
-        int err = WSAGetLastError();
-        if (err == WSAEACCES)
+        int err = errno; //WSAGetLastError();
+        if (err == EACCES)
           printf("elevation failed?");
         else
           printf("Failed to create raw socket with error %d", err);
 
         return err;
       }
-      assert(sniffer != INVALID_SOCKET);
+      assert(sniffer != -1);
 
+#ifdef _WIN32
       sockaddr_in if0 = { 0 };
       if0.sin_family = AF_INET;
       if0.sin_addr.s_addr = inet_addr(interfaceName);
 
-      int r = bind(sniffer, (sockaddr*)&if0, sizeof(if0));
-      checksocketresult(r, "Error %d trying to bind to address");
+      auto r = bind(sniffer, (sockaddr*)&if0, sizeof(if0));
+//      checksocketresult(r, "Error %d trying to bind to address");
 
       DWORD rcvall_flag = 1;
       DWORD bytesReturned = 0;
@@ -41,15 +42,15 @@ namespace acme {
 
         return err;
       }
-
+#endif
       char Buffer[65536];
 
       while (1)
       {
         // receive a snooped packet
         sockaddr from;
-        int fromlen = sizeof(from);
-        int pktlen = recvfrom(sniffer, Buffer, sizeof(Buffer), 0, &from, &fromlen);
+        socklen_t fromlen = sizeof(from);
+        auto pktlen = recvfrom(sniffer, Buffer, sizeof(Buffer), 0, &from, &fromlen);
         internet_header* iphdr = (internet_header*)Buffer;
 
         callback(*iphdr, pktlen);
@@ -57,7 +58,8 @@ namespace acme {
 
       // unreachable
 
-      closesocket(sniffer);
+//      closesocket(sniffer);
+      close(sniffer);
     }
 
   };
